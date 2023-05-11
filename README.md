@@ -9,16 +9,19 @@ In this tutorial, you'll Learn how to integrate Azure Deployment Environments in
 ## Features
 
 In this tutorial, you learn how to:
-
-1. Create and configure a dev center
-2. Create a key vault
-3. Create and configure a GitHub repository
-4. Connect the catalog to your dev center
-5. Configure deployment identities
-6. Configure GitHub environments
-7. Test the CI/CD pipeline
+1. Configure deployment identities
+1. Configure GitHub environments
+1. Test the CI/CD pipeline
 
 ## Getting Started
+
+### Prereqs
+- Dev center
+- Catalog and Catalog items in Dev Center
+- Dev center Project
+- PAT
+
+### CICD Getting started
 
 - Create Repo from this template
 - Open codespace
@@ -40,6 +43,7 @@ AZURE_CATALOG=catalog-sample
 AZURE_CATALOG_ITEM=FunctionApp
 AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 AZURE_TENANT_ID=$(az account show --query tenantId -o tsv)
+GITHUB_TOKEN=< PAT >
 
 gh variable set AZURE_DEVCENTER --body "${AZURE_DEVCENTER}"
 gh variable set AZURE_PROJECT --body "${AZURE_PROJECT}" 
@@ -51,8 +55,7 @@ gh variable set AZURE_TENANT_ID --body "${AZURE_TENANT_ID}"
 
 ```bash
 # Create the App and Federated Identity
-AZURE_PROJECT="project-aks"
-APP_DISPLAY_NAME="$AZURE_PROJECT-deploy-Dev"
+APP_DISPLAY_NAME="$AZURE_PROJECT-cicd-Dev"
 az ad app create --display-name "$APP_DISPLAY_NAME"
 # Go to portal and look at Enterprise Application
 
@@ -66,21 +69,24 @@ echo "DEV_APPLICATION_ID: $DEV_APPLICATION_ID"
 
 ```bash
 # Create service principal for App
-az ad sp create --id $DEV_AZURE_CLIENT_ID --query id -o tsv
+az ad sp create --id $DEV_AZURE_CLIENT_ID
 DEV_SERVICE_PRINCIPAL_ID=$(az ad sp show --id $DEV_AZURE_CLIENT_ID --query id -o tsv)
 echo "DEV_SERVICE_PRINCIPAL_ID=$DEV_SERVICE_PRINCIPAL_ID"
-
-GITHUB_ENV=Dev
-REPO_WITHOUT_SCHEME=$(git config --get remote.origin.url | grep -oP 'https://\K\S+')
-FEDERATED_ID_NAME="ADEDev-Renato"
-echo "REPO_WITHOUT_SCHEME: $REPO_WITHOUT_SCHEME"
 ```
 
 ```bash
-# Create dev environment in Github
-gh api --method PUT -H "Accept: application/vnd.github+json" repos/renato-marciano/deployment-environments-cicd/environments/Dev
-gh secret set AZURE_CLIENT_ID --body "${DEV_APPLICATION_ID}" --env Dev 
+GITHUB_ENV=Dev
+REPO_WITHOUT_SCHEME=$(git config --get remote.origin.url | grep -oP 'https://github.com/\K\S+')
+echo "REPO_WITHOUT_SCHEME: $REPO_WITHOUT_SCHEME"
 
+
+# Create dev environment in Github
+
+gh api --method PUT -H "Accept: application/vnd.github+json" repos/$REPO_WITHOUT_SCHEME/environments/Dev
+gh secret set AZURE_CLIENT_ID --body "${DEV_AZURE_CLIENT_ID}" --env Dev 
+
+# CHange this
+FEDERATED_ID_NAME=< federnated name i.e. ADE-CICD>
 # Could be replaced by az ad app federated-credential create
 # Create the federated identity credential for Dev
 az rest --method POST \
@@ -93,7 +99,8 @@ az ad app federated-credential show --id "$DEV_AZURE_CLIENT_ID" --federated-cred
 ```
 
 ```bash
-PROJECT_ID=$(az devcenter admin project show -n "project-sample" --query id -o tsv)
+RESOURCE_GROUP=rg-dev-center
+PROJECT_ID=$(az devcenter admin project show -n $AZURE_PROJECT --query id -o tsv -g $RESOURCE_GROUP)
 echo "PROJECT_ID=$PROJECT_ID"
 
 # Assign reader role to project
@@ -116,12 +123,29 @@ az role assignment create \
 
 ```bash
 # Trigger Pipeline by creating a new branch.
-git checkout -b branch-name
-git push
+BRANCH=new-repo
+git checkout -b $BRANCH
+git push --set-upstream origin $BRANCH
 
 # Skipping CICD protection rules 
 # Skipping Branch Protection Rules
 # Skipping Required Reviewers
 ```
-# Clean up
-az devcenter dev environment delete --dev-center-name "{devCenterName}" --name "{environmentName}" --project-name "{projectName}"
+
+
+```bash
+# Check Actions
+ACTIONS_URL="$(git config --get remote.origin.url)/actions"
+echo "Click here! $ACTIONS_URL"
+```
+
+```bash
+## DOES NOT WORK.. GO TO PORTAL
+## Clean up, or trigger env delete
+REPO_ID=$(echo $(gh api -H "Accept: application/vnd.github+json" repos/$REPO_WITHOUT_SCHEME) | jq .id)
+echo $REPO_ID
+
+ENV_NAME=ci-branch-$BRANCH-$REPO_ID
+echo $ENV_NAME
+az devcenter dev environment delete -d "$AZURE_DEVCENTER" --project "$AZURE_PROJECT" -n "$ENV_NAME" -y
+```
