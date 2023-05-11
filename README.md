@@ -9,14 +9,9 @@ In this tutorial, you'll Learn how to integrate Azure Deployment Environments in
 ## Features
 
 In this tutorial, you learn how to:
-
-1. Create and configure a dev center
-2. Create a key vault
-3. Create and configure a GitHub repository
-4. Connect the catalog to your dev center
-5. Configure deployment identities
-6. Configure GitHub environments
-7. Test the CI/CD pipeline
+1. Configure deployment identities
+1. Configure GitHub environments
+1. Test the CI/CD pipeline
 
 ## Getting Started
 
@@ -49,7 +44,6 @@ AZURE_CATALOG_ITEM=FunctionApp
 AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 AZURE_TENANT_ID=$(az account show --query tenantId -o tsv)
 GITHUB_TOKEN=< PAT >
-
 
 gh variable set AZURE_DEVCENTER --body "${AZURE_DEVCENTER}"
 gh variable set AZURE_PROJECT --body "${AZURE_PROJECT}" 
@@ -146,6 +140,12 @@ echo "Click here! $ACTIONS_URL"
 ```
 
 ```bash
+## DOES NOT WORK.. GO TO PORTAL
 ## Clean up, or trigger env delete
-az devcenter dev environment delete --dev-center-name "$AZURE_DEVCENTER --name "{environmentName}" --project-name "$AZURE_PROJECT"
+REPO_ID=$(echo $(gh api -H "Accept: application/vnd.github+json" repos/$REPO_WITHOUT_SCHEME) | jq .id)
+echo $REPO_ID
+
+ENV_NAME=ci-branch-$BRANCH-$REPO_ID
+echo $ENV_NAME
+az devcenter dev environment delete -d "$AZURE_DEVCENTER" --project "$AZURE_PROJECT" -n "$ENV_NAME" -y
 ```
